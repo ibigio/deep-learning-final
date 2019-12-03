@@ -3,3 +3,4 @@ open_spiel/**
 open_spiel
 .vscode/
 venv/
+**/__pycache__/**
