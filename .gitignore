@@ -1,3 +1,5 @@
 **DS_Store**
 open_spiel/**
 open_spiel
+.vscode/
+venv/
