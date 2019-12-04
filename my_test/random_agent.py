@@ -9,4 +9,3 @@ class RandomAgent:
         cur_player = int(observations['current_player'])
         actions = observations['legal_actions'][cur_player]
         return np.random.choice(actions)
-

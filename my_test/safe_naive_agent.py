@@ -168,3 +168,28 @@ class SafeNaiveAgent:
         else:
             return 'Liar'
 
+    def step(self, action_history, observations):
+        """
+        Determines safest call based on the previous call and its own hand.
+
+        :param action_history: List of previous actions (ints), in order
+        :param observations: Dict containing current state of game, with the following keys:
+            - info_state        array [num_players x encoding_size] containing encoded game
+                                state for each player
+            - legal_actions     array [num_players x possible actions] containing available
+                                legal actions for each player
+            - current_player    int representing current player
+        :return: An action (int)
+        """
+        last_action = action_history[-1] # only care about most recent call
+        cur_player = int(observations['current_player'])
+
+        self.hand = player_info_state_to_hand(observations['info_state'][cur_player]) # hand for the round (a 4 and three 5s has form [0,0,0,1,3,0])
+
+        call = action_id_to_call(last_action)
+        quantity, face_value = call
+
+        # NOTE: this player will never call wildcards
+        best_call = self.respond_to_call(quantity, face_value)
+
+        return call_to_action_id(best_call)
