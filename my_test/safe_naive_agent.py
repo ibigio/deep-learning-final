@@ -168,6 +168,14 @@ class SafeNaiveAgent:
         else:
             return 'Liar'
 
+    def make_starting_call(self):
+
+        starting_face_value = np.random.randint(6) + 1
+        starting_quantity = self.hand[starting_face_value - 1]
+        starting_quantity += max(1, np.random.randint(-1,2))
+
+        return (starting_quantity, starting_face_value)
+
     def step(self, action_history, observations):
         """
         Determines safest call based on the previous call and its own hand.
@@ -181,15 +189,22 @@ class SafeNaiveAgent:
             - current_player    int representing current player
         :return: An action (int)
         """
-        last_action = action_history[-1] # only care about most recent call
         cur_player = int(observations['current_player'])
-
         self.hand = player_info_state_to_hand(observations['info_state'][cur_player]) # hand for the round (a 4 and three 5s has form [0,0,0,1,3,0])
 
-        call = action_id_to_call(last_action)
-        quantity, face_value = call
-
         # NOTE: this player will never call wildcards
-        best_call = self.respond_to_call(quantity, face_value)
+
+        best_call = None
+
+        # If it is responding to a call
+        if action_history:
+            last_action = action_history[-1] # only care about most recent call
+            call = action_id_to_call(last_action)
+            quantity, face_value = call
+            best_call = self.respond_to_call(quantity, face_value)
+        
+        # If it is starting
+        else:
+            best_call = self.make_starting_call()
 
         return call_to_action_id(best_call)

@@ -85,16 +85,16 @@ safe_agent = SafeNaiveAgent()
 random_agent = RandomAgent()
 interactive_agent = InteractiveAgent()
 
-play_game_verbose(env, interactive_agent, safe_agent)
+# play_game_verbose(env, interactive_agent, safe_agent)
 
-exit()
+# exit()
 
 num_games = 10000
 p0_wins = 0
 for i in range(num_games):
   if i % 1000 == 0:
     print(i)
-  rewards = play_game(env, random_agent, safe_agent)
+  rewards = play_game(env, safe_agent, safe_agent)
   if rewards[0] > 0:
     p0_wins += 1
 
