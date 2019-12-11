@@ -72,10 +72,12 @@ class ReinforceWithBaseline(tf.keras.Model):
         dense_call = self.actor_call_dense(embedded_call)
         dense_hand = self.actor_hand_dense(embedded_hand)
 
-        concatted = tf.concat(dense_call, dense_hand)
+        concatted = tf.concat([dense_call, dense_hand], 1)
+
         dense_concatted = self.actor_concat_dense(concatted)
 
         output = self.actor_output_dense(dense_concatted)
+
         return output
 
     def value_function(self, call, hand):
@@ -94,7 +96,7 @@ class ReinforceWithBaseline(tf.keras.Model):
         dense_call = self.critic_call_dense(embedded_call)
         dense_hand = self.critic_hand_dense(embedded_hand)
 
-        concatted = tf.concat(dense_call, dense_hand)
+        concatted = tf.concat([dense_call, dense_hand], 1)
         dense_concatted = self.critic_concat_dense(concatted)
 
         output = self.critic_output_dense(dense_concatted)

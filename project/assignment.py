@@ -79,28 +79,34 @@ def generate_trajectory(env, model, adversary):
         # If adversary's turn, make move and update last call
         if cur_player_id != model_player_id:
             action = adversary.step(last_call, hand_id)
-            time_step = time_step.step([action])
+            time_step = env.step([action])
+            if time_step.last():
+                rewards[-1] = time_step.rewards[model_player_id]
             last_call = action
             cur_agent, next_agent = next_agent, cur_agent
             continue
 
         # get action from agent
         if last_call == None:
-            last_call = 0
-        last_call_tensor = tf.convert_to_tensor([last_call])
-        hand_id_tensor = tf.convert_to_tensor([hand_id])
-        prbs = np.squeeze(cur_agent.call(last_call_tensor, hand_id_tensor))
+            last_call = 1
+        last_call_tensor = tf.convert_to_tensor([last_call], dtype=tf.float32)
+        hand_id_tensor = tf.convert_to_tensor([hand_id], dtype=tf.float32)
+        prbs = cur_agent.call(last_call_tensor, hand_id_tensor)[0].numpy()
 
         # mask out illegal actions
         legal_actions = time_step.observations['legal_actions'][cur_player_id]
-        legal_actions_mask = np.zeros(len(prbs), dtyp=bool)
-        legal_actions_mask[legal_actions] = True
+        legal_actions_mask = np.ones(env.num_actions, dtype=bool)
+        legal_actions_mask[legal_actions] = False
         prbs[legal_actions_mask] = 0
 
         # renormalize probabilities
         norm = np.sum(prbs)
         # TODO: check for zero norm
-        prbs = prbs / norm
+        if norm == 0:
+            prbs = np.zeros(env.num_actions)
+            prbs += (1/env.num_actions)
+        else:
+            prbs = prbs / norm
 
         # select action weighted by prbs
         action = np.random.choice(list(range(len(prbs))), p=prbs)
@@ -113,6 +119,7 @@ def generate_trajectory(env, model, adversary):
         actions.append(action)
         rewards.append(time_step.rewards[cur_player_id])
 
+        last_call = action
         cur_agent, next_agent = next_agent, cur_agent
 
     return calls, hands, actions, rewards
@@ -159,9 +166,11 @@ def main():
     # TODO: 
     # 1) Train your model for 650 episodes, passing in the environment and the agent. 
     all_rewards = []
-    for i in range(650):
+    epochs = 10000
+    for i in range(epochs):
         all_rewards.append(train(env, model, adversary))
-        print("Reward of past 50:",np.mean(all_rewards[-50:]))
+        if i % 50 == 0:
+            print("Reward of past 50:",np.mean(all_rewards[-50:]))
     # 2) Append the total reward of the episode into a list keeping track of all of the rewards. 
     # 3) After training, print the average of the last 50 rewards you've collected.
 

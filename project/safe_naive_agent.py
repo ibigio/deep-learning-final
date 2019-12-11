@@ -160,7 +160,7 @@ class SafeNaiveAgent:
 
         starting_face_value = np.random.randint(6) + 1
         starting_quantity = self.hand[starting_face_value - 1]
-        starting_quantity += max(1, np.random.randint(-1,2))
+        starting_quantity += max(2, np.random.randint(-1,2))
 
         return (starting_quantity, starting_face_value)
 

@@ -18,7 +18,6 @@ def play_game_verbose(env, agent_1, agent_2):
     hand_id = time_step.observations['info_state'][cur_player_id]
     action = cur_agent.call(last_action, hand_id)
 
-
     # apply action to env
     time_step = env.step([action])
 
