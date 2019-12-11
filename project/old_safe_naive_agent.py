@@ -164,7 +164,7 @@ class SafeNaiveAgent:
 
         return (starting_quantity, starting_face_value)
 
-    def step(self, last_action, hand):
+    def step(self, event_history, player_info_state):
         """
         Determines safest call based on the previous call and its own hand.
 
@@ -177,14 +177,17 @@ class SafeNaiveAgent:
             - current_player    int representing current player
         :return: An action (int)
         """
-        self.hand = self._env.id_to_unique_hand[hand]
+        hand_id = np.argmax(player_info_state[2:])
+        self.hand = self._env.id_to_unique_hand[hand_id]
 
         # NOTE: this player will never call wildcards
 
         best_call = None
 
         # If it is responding to a call
-        if last_action:
+        if event_history:
+            last_event = event_history[-1] # only care about most recent event
+            last_action = np.argmax(last_event[2:])
             call = self._env.action_id_to_call(last_action)
             quantity, face_value = call
             best_call = self.respond_to_call(quantity, face_value)

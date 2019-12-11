@@ -15,23 +15,36 @@ env = rl_environment.Environment(game)
 num_actions = env.action_spec()["num_actions"]
 
 
-class LiarsDiceEnv():
+class LiarsDiceEnv:
 
   def __init__(self):
     self._env = rl_environment.Environment('liars_dice')
     self.num_players = 2
-    self.num_faces = 5
+    self.num_faces = 6
+    self.num_dice = 5
     self.num_actions = self._env.action_spec()['num_actions']
 
     self.liar_action_string = 'Liar'
     self.liar_action_id = 60
+    self.wildcard = 6
 
-    self.compute_all_encoded_dice_rolls()
+    self.compute_translation_tables()
+
+
+  def get_state(self):
+    return self._env._state
+
+  def reset(self):
+    time_step = self._env.reset()
+    self.decode_info_state(time_step.observations['info_state'])
+    return time_step
+
 
   def step(self, action):
     time_step = self._env.step(action)
-    self.decode_info_state(encoded_time_step.observations['info_state'])
+    self.decode_info_state(time_step.observations['info_state'])
     return time_step
+
 
   def compute_translation_tables(self):
 
@@ -58,8 +71,18 @@ class LiarsDiceEnv():
     self.id_to_unique_hand = [binary_to_hand(x) for x in binary_hands]
     self.unique_hand_to_id = {self.id_to_unique_hand[i]:i for i in range(len(self.id_to_unique_hand))}
     all_encoded_rolls = compute_all_encoded_dice_rolls()
-    self.encoded_roll_to_id = {x:self.unique_hand_to_id(self.decode_roll_to_hand(x)) for x in all_encoded_rolls}
+    self.encoded_roll_to_id = {x:self.unique_hand_to_id[self.decode_roll_to_hand(x)] for x in all_encoded_rolls}
+    self.hand_id_to_onehot = [self.hand_id_to_onehot(i) for i in range(len(self.id_to_unique_hand))]
 
+
+  def hand_pretty(self, hand):
+    return ''.join([str(i+1) * hand[i] for i in range(len(hand))])
+
+
+  def hand_id_to_onehot(self, hand_id):
+    onehot = [0] * len(self.id_to_unique_hand)
+    onehot[hand_id] = 1
+    return onehot
 
 
   def decode_roll_to_hand(self, encoded_roll):
@@ -68,13 +91,14 @@ class LiarsDiceEnv():
       index = i * self.num_faces
       face = np.argmax(encoded_roll[index:index + self.num_faces])
       hand[face] += 1
-    return hand
+    return tuple(hand)
 
 
   def decode_player_info_state(self, player_info_state):
     dice_space = self.num_dice * self.num_faces
-    encoded_hand_tuple = tuple(player_info_state[2:2+dice_space])
-    return player_info_state[:2] + self.encoded_hand_to_id[encoded_hand_tuple]
+    encoded_roll_tuple = tuple(player_info_state[2:2+dice_space])
+    hand_id = self.encoded_roll_to_id[encoded_roll_tuple]
+    return hand_id
 
 
   def decode_info_state(self, info_state):
@@ -87,6 +111,7 @@ class LiarsDiceEnv():
         return False
     return call.lower() == self.liar_action_string.lower()
 
+
   def action_id_to_call(self, action_id):
     quantity = (action_id // self.num_faces) + 1
     face = (action_id % self.num_faces) + 1
@@ -95,6 +120,7 @@ class LiarsDiceEnv():
     if quantity > (self.num_players * self.num_dice):
       return self.liar_action_string
     return (quantity, face)
+
 
   def call_to_action_id(self, call):
     if self.call_is_liar(call):
