@@ -103,10 +103,24 @@ def generate_trajectory(env, model, adversary):
         norm = np.sum(prbs)
         # TODO: check for zero norm
         if norm == 0:
+            old_prbs = prbs
             prbs = np.zeros(env.num_actions)
-            prbs += (1/env.num_actions)
+            prbs[legal_actions] += (1/len(legal_actions))
+            if np.isnan(prbs).any():
+                print('Before:', old_prbs)
+                print('Legal Actions:', legal_actions)
+                print('After:', prbs)
         else:
+            old_prbs = prbs
+
             prbs = prbs / norm
+
+            if np.isnan(prbs).any():
+                print('Before:',old_prbs)
+                print('Norm:',norm)
+                print('After:', prbs)
+                exit()
+
 
         # select action weighted by prbs
         action = np.random.choice(list(range(len(prbs))), p=prbs)
