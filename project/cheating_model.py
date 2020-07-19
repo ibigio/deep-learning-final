@@ -29,13 +29,13 @@ class ReinforceWithBaseline(tf.keras.Model):
         self.call_size = 61
         self.hand_size = 252
 
-        self.call_embedding_size = 32
-        self.hand_embedding_size = 32
+        self.call_embedding_size = 16
+        self.hand_embedding_size = 16
 
-        self.call_hidden_size = 16
-        self.hand_hidden_size = 16
+        self.call_hidden_size = 32
+        self.hand_hidden_size = 32
 
-        self.concat_hidden_size = 8
+        self.concat_hidden_size = 16
         
         # Define network parameters and optimizer
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.002)
@@ -45,16 +45,20 @@ class ReinforceWithBaseline(tf.keras.Model):
 
         self.actor_call_dense = Dense(self.call_hidden_size, activation='relu')
         self.actor_hand_dense = Dense(self.hand_hidden_size, activation='relu')
+        self.actor_ad_hand_dense = Dense(self.hand_hidden_size, activation='relu')
+
         self.actor_concat_dense = Dense(self.concat_hidden_size, activation='relu')
         self.actor_output_dense = Dense(self.num_actions, activation='softmax')
 
         self.critic_call_dense = Dense(self.call_hidden_size, activation='relu')
         self.critic_hand_dense = Dense(self.hand_hidden_size, activation='relu')
+        self.critic_ad_hand_dense = Dense(self.hand_hidden_size, activation='relu')
+
         self.critic_concat_dense = Dense(self.concat_hidden_size, activation='relu')
         self.critic_output_dense = Dense(1)
 
     @tf.function
-    def call(self, call, hand):
+    def call(self, call, hand, ad_hand):
         """
         Performs the forward pass on a batch of states to generate the action probabilities.
         This returns a policy tensor of shape [episode_length, num_actions], where each row is a
@@ -69,11 +73,13 @@ class ReinforceWithBaseline(tf.keras.Model):
 
         embedded_call = self.call_embedding(call)
         embedded_hand = self.hand_embedding(hand)
+        embedded_ad_hand = self.hand_embedding(ad_hand)
 
         dense_call = self.actor_call_dense(embedded_call)
         dense_hand = self.actor_hand_dense(embedded_hand)
+        dense_ad_hand = self.actor_ad_hand_dense(embedded_ad_hand)
 
-        concatted = tf.concat([dense_call, dense_hand], 1)
+        concatted = tf.concat([dense_call, dense_hand, dense_ad_hand], 1)
 
         dense_concatted = self.actor_concat_dense(concatted)
 
@@ -81,7 +87,7 @@ class ReinforceWithBaseline(tf.keras.Model):
 
         return output
 
-    def value_function(self, call, hand):
+    def value_function(self, call, hand, ad_hand):
         """
         Performs the forward pass on a batch of states to calculate the value function, to be used as the
         critic in the loss function.
@@ -93,17 +99,19 @@ class ReinforceWithBaseline(tf.keras.Model):
         # Embed hand and events.
         embedded_call = self.call_embedding(call)
         embedded_hand = self.hand_embedding(hand)
+        embedded_ad_hand = self.hand_embedding(ad_hand)
 
         dense_call = self.critic_call_dense(embedded_call)
         dense_hand = self.critic_hand_dense(embedded_hand)
+        dense_ad_hand = self.critic_ad_hand_dense(embedded_ad_hand)
 
-        concatted = tf.concat([dense_call, dense_hand], 1)
+        concatted = tf.concat([dense_call, dense_hand, dense_ad_hand], 1)
         dense_concatted = self.critic_concat_dense(concatted)
 
         output = self.critic_output_dense(dense_concatted)
         return output
 
-    def loss(self, calls, hands, actions, discounted_rewards):
+    def loss(self, calls, hands, ad_hands, actions, discounted_rewards):
         """
         Computes the loss for the agent. Refer to the handout to see how this is done.
 
@@ -131,8 +139,8 @@ class ReinforceWithBaseline(tf.keras.Model):
         # TODO: implement this :)
         # Hint: use tf.gather_nd (https://www.tensorflow.org/api_docs/python/tf/gather_nd) to get the probabilities of the actions taken by the model
         
-        prbs = tf.gather_nd(self.call(calls, hands),tf.convert_to_tensor(list(enumerate(actions))))
-        advantages = tf.convert_to_tensor(discounted_rewards - self.value_function(calls, hands),dtype=tf.float32)
+        prbs = tf.gather_nd(self.call(calls, hands, ad_hands),tf.convert_to_tensor(list(enumerate(actions))))
+        advantages = tf.convert_to_tensor(discounted_rewards - self.value_function(calls, hands, ad_hands),dtype=tf.float32)
         stopped_advantages = tf.stop_gradient(advantages)
         weighted = tf.math.multiply(-tf.math.log(prbs + 1e-15),stopped_advantages)
         actor_loss = tf.math.reduce_sum(weighted)

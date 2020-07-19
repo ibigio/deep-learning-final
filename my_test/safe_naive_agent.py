@@ -5,7 +5,10 @@ import numpy as np
 num_players = 2
 num_dice = 5
 num_faces = 6
-dice_space = num_dice * num_faces
+die_space = 5
+dice_space = num_dice * die_space
+
+LIAR_CALL = 'Liar'
 
 """
 Helper functions.
@@ -23,17 +26,22 @@ Helper functions.
         given an info_state, return our custom encoding of a hand
 """
 
+def is_liar_call(call):
+    if type(call) != str:
+        return False
+    return call.lower() == LIAR_CALL.lower()
+
 def action_id_to_call(bidnum):
     quantity = (bidnum // num_faces) + 1
     face_value = 1 + (bidnum % num_faces)
     if face_value == 0:
         face_value = num_faces
     if quantity > (num_players * num_dice):
-        return 'Liar'
+        return LIAR_CALL
     return (quantity, face_value)
 
 def call_to_action_id(call):
-    if call == 'Liar':
+    if is_liar_call(call):
         return 60
     quantity, face_value = call
     return ((quantity - 1) * num_faces) + (face_value - 1)
@@ -45,14 +53,11 @@ def choose(n,k):
     return numer // denom
 
 def player_info_state_to_hand(player_info_state):
-    faces = 6
     one_hot_hand = player_info_state[num_players:num_players+dice_space]
-    numeric_hand = [0] * faces
-    for i in range(faces):
-        ind = i*faces
-        one_hot_die = one_hot_hand[ind:ind+faces]
-        if not one_hot_die: # end of list of dice
-            continue
+    numeric_hand = [0] * num_faces
+    for i in range(num_dice):
+        ind = i*die_space
+        one_hot_die = one_hot_hand[ind:ind+die_space]
         if sum(one_hot_die) == 0:
             numeric_hand[5] += 1
         else:
@@ -166,7 +171,7 @@ class SafeNaiveAgent:
             return best_call
         # otherwise, return None (represents calling Liar)
         else:
-            return 'Liar'
+            return LIAR_CALL
 
     def make_starting_call(self):
 

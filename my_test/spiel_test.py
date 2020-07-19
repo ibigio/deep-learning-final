@@ -5,6 +5,7 @@ from open_spiel.python import rl_environment
 from safe_naive_agent import SafeNaiveAgent
 from random_agent import RandomAgent
 from interactive_agent import InteractiveAgent
+from helpers import player_info_state_to_hand
 
 import operator as op
 from functools import reduce
@@ -30,14 +31,12 @@ def hand_pretty(hand):
     return ''.join([str(i+1) * hand[i] for i in range(len(hand))])
 
 def player_info_state_to_hand(player_info_state):
-    faces = 6
     one_hot_hand = player_info_state[num_players:num_players+dice_space]
-    numeric_hand = [0] * faces
-    for i in range(faces):
-        ind = i*faces
-        one_hot_die = one_hot_hand[ind:ind+faces]
-        if not one_hot_die: # end of list of dice
-            continue
+    numeric_hand = [0] * num_faces
+    for i in range(num_dice):
+        ind = i*die_space
+        one_hot_die = one_hot_hand[ind:ind+die_space]
+        print(one_hot_die)
         if sum(one_hot_die) == 0:
             numeric_hand[5] += 1
         else:
@@ -62,6 +61,8 @@ def play_game_verbose(env, agent_1, agent_2):
     pretty_hand = hand_pretty(player_info_state_to_hand(time_step.observations['info_state'][i]))
     print(f"Player {i}'s Hand: {pretty_hand}")
   print(f'Winner: Player {np.argmax(time_step.rewards)}')
+  print(time_step)
+  print(env._state)
   return time_step.rewards
 
 def play_game(env, agent_1, agent_2):
@@ -85,9 +86,9 @@ safe_agent = SafeNaiveAgent()
 random_agent = RandomAgent()
 interactive_agent = InteractiveAgent()
 
-# play_game_verbose(env, interactive_agent, safe_agent)
+play_game_verbose(env, interactive_agent, safe_agent)
 
-# exit()
+exit()
 
 num_games = 10000
 p0_wins = 0

@@ -6,7 +6,8 @@ import re
 num_players = 2
 num_dice = 5
 num_faces = 6
-dice_space = num_dice * num_faces
+die_space = 5
+dice_space = num_dice * die_space
 
 """
 Helper functions.
@@ -56,14 +57,11 @@ def hand_pretty(hand):
     return ''.join([str(i+1) * hand[i] for i in range(len(hand))])
 
 def player_info_state_to_hand(player_info_state):
-    faces = 6
     one_hot_hand = player_info_state[num_players:num_players+dice_space]
-    numeric_hand = [0] * faces
-    for i in range(faces):
-        ind = i*faces
-        one_hot_die = one_hot_hand[ind:ind+faces]
-        if not one_hot_die: # end of list of dice
-            continue
+    numeric_hand = [0] * num_faces
+    for i in range(num_dice):
+        ind = i*die_space
+        one_hot_die = one_hot_hand[ind:ind+die_space]
         if sum(one_hot_die) == 0:
             numeric_hand[5] += 1
         else:

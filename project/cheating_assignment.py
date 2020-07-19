@@ -3,10 +3,11 @@ from pylab import *
 import numpy as np
 import tensorflow as tf
 
-from model import ReinforceWithBaseline
+from cheating_model import ReinforceWithBaseline
 
 from liars_dice_gym import LiarsDiceEnv
 from safe_naive_agent import SafeNaiveAgent
+from random_agent import RandomAgent
 
 
 def visualize_data(total_rewards):
@@ -61,6 +62,7 @@ def generate_trajectory(env, model, adversary):
     """
     calls = []
     hands = []
+    ad_hands = []
     actions = []
     rewards = []
 
@@ -75,13 +77,14 @@ def generate_trajectory(env, model, adversary):
         # get cur player id and hand
         cur_player_id = int(time_step.observations['current_player'])
         hand_id = time_step.observations['info_state'][cur_player_id]
+        ad_hand_id = time_step.observations['info_state'][1-cur_player_id]
 
         # If adversary's turn, make move and update last call
         if cur_player_id != model_player_id:
             action = adversary.step(last_call, hand_id)
             time_step = env.step([action])
             if time_step.last():
-                rewards[-1] = time_step.rewards[model_player_id]
+                rewards[-1] = max(time_step.rewards[model_player_id],0)
             last_call = action
             cur_agent, next_agent = next_agent, cur_agent
             continue
@@ -91,7 +94,8 @@ def generate_trajectory(env, model, adversary):
             last_call = 1
         last_call_tensor = tf.convert_to_tensor([last_call], dtype=tf.float32)
         hand_id_tensor = tf.convert_to_tensor([hand_id], dtype=tf.float32)
-        prbs = cur_agent.call(last_call_tensor, hand_id_tensor)[0].numpy()
+        ad_hand_id_tensor = tf.convert_to_tensor([ad_hand_id], dtype=tf.float32)
+        prbs = cur_agent.call(last_call_tensor, hand_id_tensor, ad_hand_id_tensor)[0].numpy()
 
         # mask out illegal actions
         legal_actions = time_step.observations['legal_actions'][cur_player_id]
@@ -118,88 +122,15 @@ def generate_trajectory(env, model, adversary):
         # update calls, hands, actions, and rewards
         calls.append(last_call)
         hands.append(hand_id)
+        ad_hands.append(hand_id)
         actions.append(action)
-        rewards.append(time_step.rewards[cur_player_id])
+        rewards.append(max(time_step.rewards[cur_player_id],0))
 
         last_call = action
         cur_agent, next_agent = next_agent, cur_agent
 
-    return calls, hands, actions, rewards
+    return calls, hands, ad_hands, actions, rewards
 
-def get_model_roll():
-    while True:
-        model_hand = input('Enter Model Roll:')
-        if len(model_hand) != 5:
-            continue
-        hand = [0] * 6
-        for i in model_hand:
-            face = int(i) - 1
-            if face < 0 or face > 5:
-                continue
-            hand[face] += 1
-        return tuple(hand)
-
-
-def get_player_input():
-    while True:
-        try:
-            player_move = input('Player Move:')
-            if player_move == 'done':
-                return None
-            if player_move == 'start':
-                return -1
-            s = player_move.split(',')
-            quantity = int(s[0])
-            face = int(s[1])
-            if quantity < 1 or quantity > 10:
-                continue
-            if face < 1 or face > 6:
-                continue
-            return (quantity, face)
-        except:
-            continue
-
-def play_interactive(env, model):
-    model_hand = get_model_roll()
-    model_hand_id = env.unique_hand_to_id[model_hand]
-
-    while True:
-        player_call = get_player_input()
-        if player_call is None:
-            return None
-        call_id = env.call_to_action_id(player_call)
-        print('Action Id:',call_id)
-        print('Hand Id:',model_hand_id)
-        hand_tensor = tf.convert_to_tensor([model_hand_id], dtype=tf.float32)
-        call_tensor = tf.convert_to_tensor([call_id], dtype=tf.float32)
-        prbs = model.call(call_tensor, hand_tensor)[0].numpy()
-        normed_prbs = np.zeros(env.num_actions)
-        normed_prbs[call_id+1:] = (prbs[call_id+1:])
-        normed_prbs = normed_prbs / np.sum(normed_prbs)
-        print('SUM:', np.sum(normed_prbs))
-        print(normed_prbs)
-        action = np.random.choice(list(range(len(prbs))), p=normed_prbs)
-        print(env.action_id_to_call(action))
-
-def play_interactive_bayes(env, agent):
-    model_hand = get_model_roll()
-    model_hand_id = env.unique_hand_to_id[model_hand]
-
-
-    while True:
-        
-        player_call = get_player_input()
-        if player_call is None:
-            return None
-
-        call_id = None
-        if player_call == -1:
-            player_call = False
-        else:
-            call_id = env.call_to_action_id(player_call)
-
-        action = agent.step(call_id, model_hand_id)
-        print(env.action_id_to_call(action))
 
 def train(env, model, adversary):
     """
@@ -219,16 +150,78 @@ def train(env, model, adversary):
     # 3) Compute the loss from the model and run backpropagation on the model.
 
     with tf.GradientTape() as tape:
-        calls, hands, actions, rewards = generate_trajectory(env, model, adversary)
+        calls, hands, ad_hands, actions, rewards = generate_trajectory(env, model, adversary)
         discounted = discount(rewards)
-        loss = model.loss(np.array(calls), np.array(hands), np.array(actions), discounted)
+        loss = model.loss(np.array(calls), np.array(hands), np.array(ad_hands), np.array(actions), discounted)
 
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
     return np.sum(rewards)
 
+def test(env, model, adversary):
+    calls, hands, ad_hands, actions, rewards = generate_trajectory(env, model, adversary)
+    return np.sum(rewards)
 
+def test_random(env, model):
+
+    time_step = env.reset()
+    model_player_id = 1
+
+    last_call = None
+
+    while not time_step.last():
+        # get cur player id and hand
+        cur_player_id = int(time_step.observations['current_player'])
+        hand_id = time_step.observations['info_state'][cur_player_id]
+        ad_hand_id = time_step.observations['info_state'][1-cur_player_id]
+
+        # If adversary's turn, make move and update last call
+        if cur_player_id != model_player_id:
+            action = np.random.choice(time_step.observations['legal_actions'][cur_player_id])
+            time_step = env.step([action])
+            last_call = action
+            continue
+
+        # get action from agent
+        if last_call == None:
+            last_call = 1
+        last_call_tensor = tf.convert_to_tensor([last_call], dtype=tf.float32)
+        hand_id_tensor = tf.convert_to_tensor([hand_id], dtype=tf.float32)
+        ad_hand_id_tensor = tf.convert_to_tensor([ad_hand_id], dtype=tf.float32)
+        prbs = model.call(last_call_tensor, hand_id_tensor, ad_hand_id_tensor)[0].numpy()
+
+        # mask out illegal actions
+        legal_actions = time_step.observations['legal_actions'][cur_player_id]
+        legal_actions_mask = np.ones(env.num_actions, dtype=bool)
+        legal_actions_mask[legal_actions] = False
+        prbs[legal_actions_mask] = 0
+
+        # renormalize probabilities
+        norm = np.sum(prbs)
+        # TODO: check for zero norm
+        if norm == 0:
+            old_prbs = prbs
+            prbs = np.zeros(env.num_actions)
+            prbs[legal_actions] += (1/len(legal_actions))
+        else:
+            prbs = prbs / norm
+
+
+        # select action weighted by prbs
+        action = np.random.choice(list(range(len(prbs))), p=prbs)
+        # apply action to env
+        time_step = env.step([action])
+
+        last_call = action
+
+    return max(time_step.rewards[model_player_id],0)
+
+def test_n_random(env, model, n):
+    rewards = []
+    for i in range(n):
+        rewards.append(test_random(env, model))
+    return np.mean(rewards)
 
 def main():
 
@@ -242,24 +235,27 @@ def main():
     # TODO: 
     # 1) Train your model for 650 episodes, passing in the environment and the agent. 
     all_rewards = []
-    epochs = 0
+    smoothed_rewards = []
+    random_test_rewards = []
+    smoothed_random_test_rewards = []
+    epochs = 10000
     for i in range(epochs):
         all_rewards.append(train(env, model, adversary))
+        # random_test_rewards.append(test_random(env, model))
         if i % 100 == 0:
-            print(f"Reward of past 100 ({i}):",np.mean(all_rewards[-100:]))
-
-    while True:
-        print()
-        print('======== Game ========')
-        play_interactive_bayes(env, adversary)
-        # play_interactive(env, model)
-        print('======================')
-        print()
+            smooth = np.mean(all_rewards[-100:])
+            smoothed_rewards.append(smooth)
+            print(f"Reward of past 100/{i}:",smooth)
+            # smooth = np.mean(random_test_rewards[-1000:])
+            # smoothed_random_test_rewards.append(smooth)
+            random = test_n_random(env, model, 1000)
+            random_test_rewards.append(random)
+            print("Reward against random:", random)
     # 2) Append the total reward of the episode into a list keeping track of all of the rewards. 
     # 3) After training, print the average of the last 50 rewards you've collected.
-
     # TODO: Visualize your rewards.
-    # visualize_data(all_rewards)
+    visualize_data(smoothed_rewards)
+    visualize_data(random_test_rewards)
 
 
 if __name__ == '__main__':
